@@ -9,7 +9,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { message, symptoms } = req.body || {};
+  const { message, symptoms, history } = req.body || {};
+
+  const safeHistory = Array.isArray(history)
+    ? history
+        .filter(function (item) {
+          return (
+            item &&
+            (item.role === "user" || item.role === "assistant") &&
+            typeof item.content === "string"
+          );
+        })
+        .slice(-8)
+    : [];
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -40,11 +52,11 @@ Rules:
 - Give real practical guidance, not vague filler.
 - Do not mention the "test collection".
 - Do not include raw URLs.
+- If this is a follow-up question, answer naturally in context.
+- Do not repeat the full welcome structure on every follow-up.
+- Only use the full welcome structure for the first answer in a new conversation.
 
-Always start with:
-Welcome to Poorly Pet AI Support 👋
-
-Use this exact structure:
+For the first answer, use this exact structure:
 
 Welcome to Poorly Pet AI Support 👋
 
@@ -62,15 +74,22 @@ Support worth exploring:
 
 Vet note:
 One short safety sentence.
+
+For follow-up answers, keep it conversational, short and helpful.
 `
           },
           {
             role: "user",
-            content: `Symptoms: ${(symptoms || []).join(", ")}\nMessage: ${message || ""}`,
+            content: `Selected symptoms: ${(symptoms || []).join(", ")}`,
+          },
+          ...safeHistory,
+          {
+            role: "user",
+            content: message || "",
           },
         ],
         temperature: 0.55,
-        max_tokens: 170,
+        max_tokens: 190,
       }),
     });
 
