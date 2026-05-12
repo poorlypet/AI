@@ -3,87 +3,55 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed"
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { message, symptoms } = req.body;
-
-  const prompt = `
-You are the Poorly Pet AI assistant.
-
-You help dog owners understand possible support areas.
-
-IMPORTANT RULES:
-- Never diagnose diseases
-- Never replace a vet
-- Never prescribe medication
-- Keep answers calm, warm, professional and premium
-- Suggest support categories only
-
-Possible support areas:
-- Skin and coat support
-- Joint and mobility support
-- Calming support
-- Digestive support
-- Dental support
-- Recovery support
-- Senior dog support
-
-Symptoms:
-${symptoms?.join(", ") || ""}
-
-Customer message:
-${message}
-
-Structure your response like this:
-
-1. Short reassuring introduction
-2. "Support areas to explore"
-3. "What to keep an eye on"
-4. Gentle vet advice if symptoms worsen
-5. Short encouraging closing line
-`;
+  const { message, symptoms } = req.body || {};
 
   try {
-    const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          messages: [
-            {
-              role: "system",
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-        }),
-      }
-    );
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are the Poorly Pet AI assistant. Help dog owners understand possible support areas. Never diagnose. Never replace a vet. Suggest wellness support categories only. Keep replies calm, warm, concise and professional.",
+          },
+          {
+            role: "user",
+            content: `Symptoms: ${(symptoms || []).join(", ")}\nMessage: ${message || ""}`,
+          },
+        ],
+        temperature: 0.6,
+        max_tokens: 350,
+      }),
+    });
 
     const data = await response.json();
 
+    if (!response.ok) {
+      console.error("OpenAI error:", data);
+      return res.status(500).json({
+        error: data.error?.message || "OpenAI request failed",
+      });
+    }
+
     return res.status(200).json({
-      reply: data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response."
+      reply: data.choices?.[0]?.message?.content || "No response generated.",
     });
-
   } catch (error) {
-    console.error(error);
-
+    console.error("Server error:", error);
     return res.status(500).json({
-      error: "Something went wrong"
+      error: error.message || "Something went wrong",
     });
   }
 }
