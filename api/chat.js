@@ -55,6 +55,7 @@ Rules:
 - If this is a follow-up question, answer naturally in context.
 - Do not repeat the full welcome structure on every follow-up.
 - Only use the full welcome structure for the first answer in a new conversation.
+- The vet note must say exactly: consult your vet if the condition worsens or is life-threatening.
 
 For the first answer, use this exact structure:
 
@@ -73,7 +74,7 @@ Support worth exploring:
 - support area
 
 Vet note:
-One short safety sentence.
+Use this exact vet note sentence: consult your vet if the condition worsens or is life-threatening.
 
 For follow-up answers, keep it conversational, short and helpful.
 `
