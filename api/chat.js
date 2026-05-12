@@ -4,7 +4,7 @@ export default async function handler(req, res) {
       error: "Method not allowed"
     });
   }
-
+ 
   const { message, symptoms } = req.body;
 
   const prompt = `
