@@ -16,16 +16,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No symptoms provided" });
     }
 
-    const response = await fetch("https://www.poorly-pet.com/collections/test/products.json");
+    const productResponse = await fetch("https://www.poorly-pet.com/collections/test/products.json");
 
-    if (!response.ok) {
-      return res.status(500).json({ error: "Could not load products" });
+    if (!productResponse.ok) {
+      return res.status(500).json({ error: "Could not load Shopify products" });
     }
 
-    const data = await response.json();
-    const products = data.products || [];
+    const productData = await productResponse.json();
+    const products = productData.products || [];
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
+    if (!products.length) {
+      return res.status(200).json({ products: [] });
+    }
+
+    const productList = products.map((p) => ({
+      title: p.title,
+      handle: p.handle,
+      tags: p.tags,
+      type: p.product_type,
+      body: String(p.body_html || "").replace(/<[^>]*>/g, "").slice(0, 500)
+    }));
+
+    const aiResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -33,55 +45,78 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: `
-You are Poorly Pet's AI product recommender.
+        input: [
+          {
+            role: "system",
+            content:
+              "You are Poorly Pet's product matching engine. Return only valid JSON. No markdown. No explanation."
+          },
+          {
+            role: "user",
+            content: `
+Customer symptoms: ${symptoms}
 
-User symptoms:
-${symptoms}
+Products:
+${JSON.stringify(productList)}
 
-Choose up to 3 suitable products from this product list:
-${JSON.stringify(products.map((p) => ({
-  id: p.id,
-  title: p.title,
-  handle: p.handle,
-  body_html: p.body_html,
-  tags: p.tags,
-  product_type: p.product_type
-})))}
+Choose the 3 best product handles.
 
-Return ONLY valid JSON:
-{
-  "product_handles": ["handle-1", "handle-2", "handle-3"]
-}
-
-No explanation. No markdown.
-        `
+Return exactly this JSON format:
+{"handles":["product-handle-1","product-handle-2","product-handle-3"]}
+            `
+          }
+        ]
       })
     });
 
-    const aiData = await openaiResponse.json();
+    const aiData = await aiResponse.json();
 
-    if (!openaiResponse.ok) {
-      return res.status(500).json({ error: aiData.error?.message || "OpenAI failed" });
+    if (!aiResponse.ok) {
+      return res.status(500).json({
+        error: aiData.error?.message || "OpenAI request failed"
+      });
     }
 
-    const text = aiData.output_text || "{}";
-    const parsed = JSON.parse(text);
+    const aiText =
+      aiData.output_text ||
+      aiData.output?.[0]?.content?.[0]?.text ||
+      "";
+
+    let handles = [];
+
+    try {
+      const cleaned = aiText
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+      handles = Array.isArray(parsed.handles) ? parsed.handles : [];
+    } catch (error) {
+      handles = products.slice(0, 3).map((p) => p.handle);
+    }
 
     const recommended = products
-      .filter((product) => parsed.product_handles.includes(product.handle))
+      .filter((p) => handles.includes(p.handle))
       .slice(0, 3)
-      .map((product) => ({
-        title: product.title,
-        handle: product.handle,
-        url: `/products/${product.handle}`,
-        image: product.images?.[0]?.src || "",
-        price: product.variants?.[0]?.price || "",
-        vendor: product.vendor || ""
+      .map((p) => ({
+        title: p.title,
+        handle: p.handle,
+        url: `/products/${p.handle}`,
+        image: p.images?.[0]?.src || "",
+        price: p.variants?.[0]?.price || "",
+        vendor: p.vendor || ""
       }));
 
     return res.status(200).json({
-      products: recommended
+      products: recommended.length ? recommended : products.slice(0, 3).map((p) => ({
+        title: p.title,
+        handle: p.handle,
+        url: `/products/${p.handle}`,
+        image: p.images?.[0]?.src || "",
+        price: p.variants?.[0]?.price || "",
+        vendor: p.vendor || ""
+      }))
     });
   } catch (error) {
     return res.status(500).json({
