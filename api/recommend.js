@@ -59,7 +59,7 @@ Customer symptoms: ${symptoms}
 Products:
 ${JSON.stringify(productList)}
 
-Choose the 3 best product handles.
+Choose the 8 best product handles.
 
 Return exactly this JSON format:
 {"handles":["product-handle-1","product-handle-2","product-handle-3"]}
@@ -93,12 +93,12 @@ Return exactly this JSON format:
       const parsed = JSON.parse(cleaned);
       handles = Array.isArray(parsed.handles) ? parsed.handles : [];
     } catch (error) {
-      handles = products.slice(0, 3).map((p) => p.handle);
+      handles = products.slice(0, 8).map((p) => p.handle);
     }
 
     const recommended = products
       .filter((p) => handles.includes(p.handle))
-      .slice(0, 3)
+      .slice(0, 8)
       .map((p) => ({
         title: p.title,
         handle: p.handle,
@@ -109,7 +109,7 @@ Return exactly this JSON format:
       }));
 
     return res.status(200).json({
-      products: recommended.length ? recommended : products.slice(0, 3).map((p) => ({
+      products: recommended.length ? recommended : products.slice(0, 8).map((p) => ({
         title: p.title,
         handle: p.handle,
         url: `/products/${p.handle}`,
